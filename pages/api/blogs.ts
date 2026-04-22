@@ -1,23 +1,22 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { supabaseAdmin, supabaseClient } from '../../lib/supabase';
+import { getSupabaseAdmin, getSupabaseClient } from '../../lib/supabase';
 import { BlogPost, PaginatedBlogPosts, ApiError } from '../../lib/types';
 
 type ResponseData = PaginatedBlogPosts | ApiError;
 
 /**
  * API Route: GET /api/blogs
- * Fetch all blogs with pagination from Supabase
+ * Fetch published blogs with pagination from Supabase.
  *
  * Query params:
- * - page: number (default: 1)
- * - limit: number (default: 10)
- * - slug: string (filter by slug)
+ *   - page:  number (default: 1)
+ *   - limit: number (default: 10, max: 50)
+ *   - slug:  string (filter by slug — returns single post)
  */
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse<ResponseData>
 ) {
-  // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -28,20 +27,19 @@ export default async function handler(
     const pageSize = Math.min(50, Math.max(1, parseInt(limit as string, 10)));
     const offset = (pageNum - 1) * pageSize;
 
-    // Use admin client if available (server-side), otherwise use public client
-    const client = supabaseAdmin || supabaseClient;
+    // Prefer service-role client (bypasses RLS) but always filter published=true explicitly
+    const client = getSupabaseAdmin() ?? getSupabaseClient();
 
-    // Build query
     let query = client
       .from('blogs')
       .select('*', { count: 'exact' })
+      // Always filter to published posts — required when using admin client (which bypasses RLS)
+      .eq('published', true)
       .order('created_at', { ascending: false });
 
-    // Filter by slug if provided
     if (slug) {
       query = query.eq('slug', slug as string);
     } else {
-      // Apply pagination only when not filtering by slug
       query = query.range(offset, offset + pageSize - 1);
     }
 
@@ -56,16 +54,8 @@ export default async function handler(
     const total = count || 0;
     const totalPages = Math.ceil(total / pageSize);
 
-    // Cache for 60 seconds
     res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=120');
-
-    return res.status(200).json({
-      posts,
-      total,
-      page: pageNum,
-      pageSize,
-      totalPages,
-    });
+    return res.status(200).json({ posts, total, page: pageNum, pageSize, totalPages });
   } catch (error) {
     console.error('Unexpected error:', error);
     return res.status(500).json({
