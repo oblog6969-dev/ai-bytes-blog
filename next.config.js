@@ -1,20 +1,25 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Optimize images for Vercel deployment
+
+  // Optimize images - use env var for Supabase domain
   images: {
-    domains: ['your-supabase-project.supabase.co'],
+    domains: [
+      process.env.NEXT_PUBLIC_SUPABASE_URL
+        ? new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname
+        : 'placeholder.supabase.co',
+    ],
     formats: ['image/avif', 'image/webp'],
   },
-  // Enable SWC minification for better performance
-  swcMinify: true,
+
   // Configure environment variables
   env: {
     NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
     NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL,
   },
-  // Headers for security
+
+  // Security headers
   async headers() {
     return [
       {
