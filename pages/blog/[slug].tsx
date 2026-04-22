@@ -1,20 +1,59 @@
 import type { GetServerSideProps, NextPage } from 'next';
 import Link from 'next/link';
+import sanitizeHtml from 'sanitize-html';
 import Layout from '../../components/Layout';
 import { BlogPost } from '../../lib/types';
+import { getSupabaseAdmin, getSupabaseClient } from '../../lib/supabase';
+
+/** Allowed HTML tags and attributes for sanitizing post content */
+const SANITIZE_OPTIONS: sanitizeHtml.IOptions = {
+  allowedTags: [
+    'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'p', 'br', 'hr',
+    'ul', 'ol', 'li',
+    'blockquote', 'pre', 'code',
+    'strong', 'em', 'del', 'ins', 's',
+    'a', 'img',
+    'table', 'thead', 'tbody', 'tr', 'th', 'td',
+    'div', 'span',
+  ],
+  allowedAttributes: {
+    a: ['href', 'title', 'target', 'rel'],
+    img: ['src', 'alt', 'title', 'width', 'height'],
+    code: ['class'],
+    pre: ['class'],
+    '*': ['class'],
+  },
+  allowedSchemes: ['http', 'https', 'mailto'],
+  // Force external links to open safely
+  transformTags: {
+    a: (tagName, attribs) => ({
+      tagName,
+      attribs: {
+        ...attribs,
+        ...(attribs.href?.startsWith('http') ? { target: '_blank', rel: 'noopener noreferrer' } : {}),
+      },
+    }),
+  },
+};
+
+interface NavPost {
+  title: string;
+  slug: string;
+}
 
 interface BlogPostPageProps {
   post: BlogPost | null;
-  prevPost?: { title: string; slug: string } | null;
-  nextPost?: { title: string; slug: string } | null;
+  sanitizedContent: string;
+  prevPost: NavPost | null;
+  nextPost: NavPost | null;
 }
 
 /**
- * Individual blog post page
- * Fetches post by slug and renders full content
+ * Individual blog post page.
+ * Content is sanitized server-side before rendering to prevent XSS.
  */
-const BlogPostPage: NextPage<BlogPostPageProps> = ({ post, prevPost, nextPost }) => {
-  // Handle post not found
+const BlogPostPage: NextPage<BlogPostPageProps> = ({ post, sanitizedContent, prevPost, nextPost }) => {
   if (!post) {
     return (
       <Layout title="Post Not Found - AI Bytes">
@@ -119,7 +158,7 @@ const BlogPostPage: NextPage<BlogPostPageProps> = ({ post, prevPost, nextPost })
           </p>
         )}
 
-        {/* Post Content */}
+        {/* Post Content - sanitized server-side */}
         <div
           className="prose prose-invert prose-lg max-w-none
             prose-headings:text-white
@@ -130,7 +169,7 @@ const BlogPostPage: NextPage<BlogPostPageProps> = ({ post, prevPost, nextPost })
             prose-pre:bg-slate-800 prose-pre:border prose-pre:border-slate-700
             prose-blockquote:border-brand-500 prose-blockquote:text-slate-400
             prose-img:rounded-lg"
-          dangerouslySetInnerHTML={{ __html: post.content }}
+          dangerouslySetInnerHTML={{ __html: sanitizedContent }}
         />
 
         {/* Post Navigation */}
@@ -179,20 +218,56 @@ export const getServerSideProps: GetServerSideProps = async ({ params }) => {
   const slug = params?.slug as string;
 
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const response = await fetch(apiUrl + '/api/blogs?slug=' + slug);
+    const client = getSupabaseAdmin() ?? getSupabaseClient();
 
-    if (!response.ok) {
-      return { props: { post: null } };
+    // Fetch current post
+    const { data: postData, error: postError } = await client
+      .from('blogs')
+      .select('*')
+      .eq('slug', slug)
+      .eq('published', true)
+      .single();
+
+    if (postError || !postData) {
+      return { props: { post: null, sanitizedContent: '', prevPost: null, nextPost: null } };
     }
 
-    const data = await response.json();
-    const post = data.posts?.[0] || null;
+    const post = postData as BlogPost;
 
-    return { props: { post, prevPost: null, nextPost: null } };
+    // Sanitize content server-side before sending to client
+    const sanitizedContent = sanitizeHtml(post.content || '', SANITIZE_OPTIONS);
+
+    // Fetch prev post (older — created_at < current)
+    const { data: prevData } = await client
+      .from('blogs')
+      .select('title, slug')
+      .eq('published', true)
+      .lt('created_at', post.created_at)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    // Fetch next post (newer — created_at > current)
+    const { data: nextData } = await client
+      .from('blogs')
+      .select('title, slug')
+      .eq('published', true)
+      .gt('created_at', post.created_at)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    return {
+      props: {
+        post,
+        sanitizedContent,
+        prevPost: prevData ? { title: prevData.title, slug: prevData.slug } : null,
+        nextPost: nextData ? { title: nextData.title, slug: nextData.slug } : null,
+      },
+    };
   } catch (error) {
     console.error('Error fetching post:', error);
-    return { props: { post: null } };
+    return { props: { post: null, sanitizedContent: '', prevPost: null, nextPost: null } };
   }
 };
 
