@@ -3,6 +3,7 @@ import Link from 'next/link';
 import Layout from '../components/Layout';
 import BlogCard from '../components/BlogCard';
 import { BlogPost } from '../lib/types';
+import { getSupabaseAdmin, getSupabaseClient } from '../lib/supabase';
 
 interface HomePageProps {
   latestPosts: BlogPost[];
@@ -94,21 +95,27 @@ const HomePage: NextPage<HomePageProps> = ({ latestPosts }) => {
 };
 
 /**
- * Fetch latest 3 blog posts at build time
+ * Fetch latest 3 published blog posts directly from Supabase at build time.
+ * Avoids the self-HTTP-fetch anti-pattern that fails during `next build`.
  */
 export const getStaticProps: GetStaticProps = async () => {
   try {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
-    const response = await fetch(apiUrl + '/api/blogs?limit=3&page=1');
+    const client = getSupabaseAdmin() ?? getSupabaseClient();
+    const { data, error } = await client
+      .from('blogs')
+      .select('*')
+      .eq('published', true)
+      .order('created_at', { ascending: false })
+      .limit(3);
 
-    if (!response.ok) {
+    if (error) {
+      console.error('Error fetching latest posts:', error);
       return { props: { latestPosts: [] }, revalidate: 60 };
     }
 
-    const data = await response.json();
     return {
-      props: { latestPosts: data.posts || [] },
-      // Regenerate page every 60 seconds
+      props: { latestPosts: data || [] },
+      // Regenerate page every 60 seconds (ISR)
       revalidate: 60,
     };
   } catch (error) {
