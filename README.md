@@ -1,4 +1,4 @@
-# AI Bytes Blog
+# AI Bytez Blog — aibytez.co
 
 A production-ready Next.js blog platform with Supabase integration, built with TypeScript and Tailwind CSS.
 
@@ -145,7 +145,7 @@ Add these in your Vercel project settings:
 | `NEXT_PUBLIC_SUPABASE_URL` | Your Supabase project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
 | `SUPABASE_SERVICE_KEY` | Supabase service role key (server-side only) |
-| `NEXT_PUBLIC_API_URL` | Your production URL |
+| `NEXT_PUBLIC_API_URL` | Your production URL (e.g. https://aibytez.co) |
 
 ## Features
 
