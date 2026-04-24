@@ -7,7 +7,7 @@ interface LayoutProps {
   children: React.ReactNode;
   title?: string;
   description?: string;
-  ogImage?: string;h
+  ogImage?: string;
   canonicalUrl?: string;
 }
 
