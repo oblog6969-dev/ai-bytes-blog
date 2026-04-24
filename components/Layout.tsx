@@ -7,7 +7,7 @@ interface LayoutProps {
   children: React.ReactNode;
   title?: string;
   description?: string;
-  ogImage?: string;
+  ogImage?: string;h
   canonicalUrl?: string;
 }
 
@@ -22,7 +22,7 @@ const Layout: React.FC<LayoutProps> = ({
   ogImage = '/og-image.png',
   canonicalUrl,
 }) => {
-  const siteUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ai-bytes-blog.vercel.app';
+  const siteUrl = process.env.NEXT_PUBLIC_API_URL || 'https://aibytez.co';
   const canonical = canonicalUrl || siteUrl;
 
   return (
