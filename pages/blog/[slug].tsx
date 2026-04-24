@@ -82,7 +82,7 @@ const BlogPostPage: NextPage<BlogPostPageProps> = ({ post, sanitizedContent, pre
     }
   };
 
-  const siteUrl = process.env.NEXT_PUBLIC_API_URL || 'https://ai-bytes-blog.vercel.app';
+  const siteUrl = process.env.NEXT_PUBLIC_API_URL || 'https://aibytez.co';
 
   return (
     <Layout
